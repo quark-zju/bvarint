@@ -3,37 +3,22 @@
 //! Based on D. Richard Hipp.'s "A Better Varint" idea.
 //! See https://youtu.be/gpxnbly9bz4?t=2386.
 //!
-//! Slightly changed so leading 0xff is reserved for larger
-//! integers.
+//! Changed so leading 0xff is reserved for larger integers
+//! and some branches are removed.
 
 use std::io;
 
 /// Encode `v` and write it to `w`.
 pub fn write_bvarint(v: u64, mut w: impl io::Write) -> io::Result<()> {
     match v {
-        0..=0xf0 => {
+        0..=0xf6 => {
             w.write_all(&[v as u8])?;
         }
-        0xf1..=0x7ef => {
-            // v = 0xf0 + 256 * (A0 - 0xf1) + A1
-            // v - 0xf0 = ((A0 - 0xf1) << 8) + A1
-            // A0: 0xf1 to 0xf7
-            let v = v - 0xf0;
-            w.write_all(&[((v >> 8) + 0xf1) as u8, v as u8])?;
-        }
-        0x7f0..=0x107ef => {
-            // v = 0x7f0 + 256 * A1 + A2
-            // v - 0x7f0 = (A1 << 8) + A2
-            // A0 = 0xf8
-            let v = v - 0x7f0;
-            w.write_all(&[0xf8u8, (v >> 8) as u8, v as u8])?;
-        }
-        0x107f0..=u64::MAX => {
-            // A0: 0xf9 to 0xfe
+        0xf7..=u64::MAX => {
             let width = ((64 + 8 - 1 - v.leading_zeros()) / 8) as usize;
-            debug_assert!(width >= 3);
+            debug_assert!(width >= 1);
             let a: [u8; 8] = v.to_be_bytes();
-            w.write_all(&[(0xf9 - 3 + width) as u8])?;
+            w.write_all(&[(0xf7 - 1 + width) as u8])?;
             w.write_all(&a[(8 - width)..])?;
         }
     }
@@ -45,17 +30,9 @@ pub fn read_bvarint(mut r: impl io::Read) -> io::Result<u64> {
     let mut a = [0; 8];
     r.read_exact(&mut a[7..8])?;
     match a[7] {
-        0..=0xf0 => Ok(a[7] as _),
-        0xf1..=0xf7 => {
-            r.read_exact(&mut a[6..7])?;
-            Ok(0xf0u64 + (((a[7] - 0xf1) as u64) << 8) + (a[6] as u64))
-        }
-        0xf8 => {
-            r.read_exact(&mut a[6..8])?;
-            Ok(0x7f0u64 + ((a[6] as u64) << 8) + (a[7] as u64))
-        }
-        0xf9..=0xfe => {
-            let width = (a[7] - 0xf9 + 3) as usize;
+        0..=0xf6 => Ok(a[7] as _),
+        0xf7..=0xfe => {
+            let width = (a[7] - 0xf7 + 1) as usize;
             r.read_exact(&mut a[(8 - width)..8])?;
             Ok(u64::from_be_bytes(a))
         }
