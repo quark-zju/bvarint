@@ -1,0 +1,13 @@
+[package]
+name = "bvarint"
+version = "0.1.0"
+authors = ["Jun Wu <quark@lihdd.net>"]
+edition = "2018"
+description = "Varint encoding that preserves memcmp order"
+repository = "https://github.com/quark-zju/bvarint"
+license = "MIT"
+
+[dependencies]
+
+[dev-dependencies]
+quickcheck = "0.9"
